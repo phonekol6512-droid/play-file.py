@@ -26,10 +26,13 @@ def ym_say_and_return(text: str):
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
 def create_playfile():
-    # ---------- שלב 1: פרטי מערכת ----------
+    # ---------- פרטי מערכת ----------
     system = request.values.get('system')
     password = request.values.get('password')
     extension = request.values.get('extension')
+
+    # ---------- שאלה אחת: אורך הקובץ ----------
+    say_length = request.values.get('say_length')
 
     if not system:
         return ym_read("system", "t-אנא הקישו את מספר המערכת ובסיום הקישו סולמית", 10)
@@ -37,6 +40,18 @@ def create_playfile():
         return ym_read("password", "t-אנא הקישו את סיסמת המערכת ובסיום הקישו סולמית", 10)
     if not extension:
         return ym_read("extension", "t-אנא הקישו את מספר השלוחה החדשה ובסיום הקישו סולמית", 10)
+
+    # ---------- שאלה: השמעת אורך הקובץ ----------
+    if say_length is None:
+        return ym_read("say_length", "t-האם להשמיע את אורך הקובץ? 1-כן תמיד 2-רק אם ארוך מ-5 דקות 0-לא", 1)
+
+    # ---------- המרת התשובה ----------
+    if say_length == "1":
+        say_length_value = "say_length=yes"
+    elif say_length == "2":
+        say_length_value = "playfile_say_length_if=5"
+    else:
+        say_length_value = "say_length=no"
 
     # ===================== יצירת השלוחה =====================
     try:
@@ -46,13 +61,15 @@ def create_playfile():
 
         token = f"{system.strip()}:{password.strip()}"
 
-        # ---------- קובץ הגדרות בסיסי ----------
-        ext_ini = """type=playfile
+        # ---------- בניית קובץ התפריט ----------
+        ext_ini = f"""type=playfile
+start=max
 after_play=return
 play_beep=no
+{say_length_value}
 """
 
-        logging.info(f"יוצר שלוחת playfile {clean_ext}")
+        logging.info(f"יוצר שלוחת playfile {clean_ext} עם ההגדרות:\n{ext_ini}")
 
         # ---------- שלב 1: יצירת השלוחה ----------
         r1 = requests.get(
@@ -81,12 +98,18 @@ play_beep=no
         )
         logging.info(f"UploadTextFile: {r2.status_code} - {r2.text}")
 
-        # ---------- שלב 3: הודעת סיכום ----------
+        # ---------- הודעת סיכום ----------
         if r2.status_code == 200 and '"responseStatus":"OK"' in r2.text:
-            msg = f"t-שלוחת ההשמעה {clean_ext} נוצרה בהצלחה."
+            if say_length == "1":
+                length_label = "כן (תמיד)"
+            elif say_length == "2":
+                length_label = "כן (רק מעל 5 דקות)"
+            else:
+                length_label = "לא"
+            msg = f"t-שלוחת ההשמעה {clean_ext} נוצרה. אורך הקובץ: {length_label}."
             return ym_say_and_return(msg)
         else:
-            return ym_say_and_return("t-השלוחה נוצרה אך קובץ ההגדרות לא נטען")
+            return ym_say_and_return("t-השלוחה נוצרה אך התפריט לא נטען")
 
     except Exception as e:
         logging.exception("שגיאה")
