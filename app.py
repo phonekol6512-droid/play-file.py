@@ -1,13 +1,20 @@
 import re
+import os
 import logging
 import requests
 from flask import Flask, request, make_response
 
 app = Flask(__name__)
-
 YEMOT_API_URL = "https://www.call2all.co.il/ym/api/"
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# ==========================================================
+#  אבטחה: רשימת IP-ים מורשים (למשל שרתי Yemot בלבד).
+#  אם ריק - לא נבדק (מומלץ למלא בפרודקשן).
+#  אפשר להעביר כמשתנה סביבה: ALLOWED_IPS="1.2.3.4,5.6.7.8"
+# ==========================================================
+ALLOWED_IPS = set(filter(None, os.environ.get("ALLOWED_IPS", "").split(",")))
 
 
 def ym_response(content: str):
@@ -16,116 +23,156 @@ def ym_response(content: str):
     return res
 
 
-def ym_read(var_name: str, prompt: str, max_digits=10):
+def ym_read(var_name: str, prompt: str, max_digits=1):
     return ym_response(f"read={prompt}={var_name},{max_digits},12,1,Digits")
 
 
-def ym_say_and_return_to_main(text: str):
-    """משמיע הודעה וחוזר לתפריט הראשי"""
-    return ym_response(f"id_list_message={text}\ngo_to_folder=/")
+def ym_say_and_go_back(text: str):
+    """משמיע הודעה וחוזר לתפריט הקודם (ללא ניתוק) - בדיוק כמו ב-create-menu"""
+    return ym_response(f"id_list_message={text}")
 
 
-def get_param(name: str, default=None):
-    """עוזר לקבל פרמטר ולהתייחס ל'' כאל None"""
-    val = request.values.get(name)
-    return val.strip() if val and val.strip() else default
+def sanitize_token_part(value: str) -> str:
+    """
+    מסיר תווים שעלולים לשבש את בניית ה-token (system:password)
+    או לאפשר הזרקת פרמטרים נוספים ל-API של Yemot.
+    """
+    if value is None:
+        return ""
+    return re.sub(r"[^0-9A-Za-z]", "", value.strip())
+
+
+def clean_extension_path(value: str) -> str:
+    """מנקה נתיב שלוחה (מחליף * ו- ל-/ ומסיר / מיותרים בקצוות)"""
+    if not value:
+        return ""
+    return value.strip().replace('*', '/').replace('-', '/').strip('/')
+
+
+@app.before_request
+def restrict_ip():
+    if ALLOWED_IPS and request.remote_addr not in ALLOWED_IPS:
+        logging.warning(f"בקשה נחסמה מ-IP לא מורשה: {request.remote_addr}")
+        return ym_say_and_go_back("t-גישה נדחתה")
 
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
 def create_playfile():
     # ---------- פרטי מערכת ----------
-    system = get_param('system')
-    password = get_param('password')
-    extension = get_param('extension')
+    system_raw = request.values.get('system')
+    password_raw = request.values.get('password')
+    extension = request.values.get('extension')
 
-    if not system:
+    # ---------- שאלות ----------
+    say_length = request.values.get('say_length')
+    play_beep = request.values.get('play_beep')
+    play_order = request.values.get('play_order')
+    say_files_amount = request.values.get('say_files_amount')
+    source_extension = request.values.get('source_extension')
+    source_extension_path = request.values.get('source_extension_path')
+    end_action = request.values.get('end_action')
+    end_extension = request.values.get('end_extension')
+    last_play_action = request.values.get('last_play_action')
+
+    if not system_raw:
         return ym_read("system", "t-אנא הקישו את מספר המערכת ובסיום הקישו סולמית", 10)
-    if not password:
+    if not password_raw:
         return ym_read("password", "t-אנא הקישו את סיסמת המערכת ובסיום הקישו סולמית", 10)
     if not extension:
         return ym_read("extension", "t-אנא הקישו את מספר השלוחה החדשה ובסיום הקישו סולמית", 10)
 
-    # ---------- שאלות ----------
-    say_length = get_param('say_length')
-    play_beep = get_param('play_beep')
-    play_order = get_param('play_order')
-    say_files_amount = get_param('say_files_amount')
-    source_extension = get_param('source_extension')
-    source_extension_path = get_param('source_extension_path')
-    end_action = get_param('end_action')
-    end_extension = get_param('end_extension')
-    last_play_action = get_param('last_play_action')
-
-    # שאלה 1
+    # ---------- שאלה 1: אורך הקובץ ----------
     if say_length is None:
         return ym_read("say_length", "t-האם להשמיע את אורך הקובץ? 1-כן תמיד 2-רק אם ארוך מ-5 דקות 0-לא", 1)
+    if say_length not in ("0", "1", "2"):
+        return ym_read("say_length", "t-קלט לא תקין. האם להשמיע את אורך הקובץ? 1-כן תמיד 2-רק אם ארוך מ-5 דקות 0-לא", 1)
 
-    # שאלה 2
+    # ---------- שאלה 2: ביפ ----------
     if play_beep is None:
-        return ym_read("play_beep", "t-ברירת המחדל שיש ביפ בין קבצים. להסיר את הביפ הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+        return ym_read("play_beep", "t-ברירת המחדל שיש ביפ (צליל) בין קבצים. להסיר את הביפ הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+    if play_beep not in ("0", "1"):
+        return ym_read("play_beep", "t-קלט לא תקין. להסיר ביפ הקש 1, להשאיר ברירת מחדל הקש 0", 1)
 
-    # שאלה 3
+    # ---------- שאלה 3: סדר השמעה ----------
     if play_order is None:
         return ym_read("play_order", "t-ברירת המחדל השמעה מהחדש לישן (max). להחליף למינימום (מהישן לחדש) הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+    if play_order not in ("0", "1"):
+        return ym_read("play_order", "t-קלט לא תקין. להחליף סדר הקש 1, להשאיר ברירת מחדל הקש 0", 1)
 
-    # שאלה 4
+    # ---------- שאלה 4: כמות הודעות ----------
     if say_files_amount is None:
         return ym_read("say_files_amount", "t-ברירת המחדל לא להשמיע את כמות ההודעות. להשמיע הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+    if say_files_amount not in ("0", "1"):
+        return ym_read("say_files_amount", "t-קלט לא תקין. להשמיע כמות הקש 1, להשאיר ברירת מחדל הקש 0", 1)
 
-    # שאלה 5 - מקור
+    # ---------- שאלה 5: מקור קבצים ----------
     if source_extension is None:
         return ym_read("source_extension", "t-ברירת המחדל להשמיע מהשלוחה עצמה. להשמיע משלוחה אחרת הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+    if source_extension not in ("0", "1"):
+        return ym_read("source_extension", "t-קלט לא תקין. להשמיע משלוחה אחרת הקש 1, להשאיר ברירת מחדל הקש 0", 1)
 
     if source_extension == "1" and not source_extension_path:
-        return ym_read("source_extension_path", "t-אנא הקישו את מספר השלוחה המקור (לשלוחה פנימית הקישו כוכבית בין שלוחה לשלוחה) ובסיום הקישו סולמית", 20)
+        return ym_read("source_extension_path", "t-אנא הקישו את מספר השלוחה המקור (לשלוחה פנימית הקישו כוכבית) ובסיום הקישו סולמית", 10)
 
-    # שאלה 6 - סיום
+    # ---------- שאלה 6: סיום ----------
     if end_action is None:
-        return ym_read("end_action", "t-ברירת המחדל לחזור אחורה. לעבור לשלוחה אחרת הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+        return ym_read("end_action", "t-ברירת המחדל לחזור אחורה אחרי הסיום. לעבור לשלוחה אחרת הקש 1, להשאיר ברירת מחדל הקש 0", 1)
+    if end_action not in ("0", "1"):
+        return ym_read("end_action", "t-קלט לא תקין. לעבור לשלוחה אחרת הקש 1, להשאיר ברירת מחדל הקש 0", 1)
 
     if end_action == "1" and not end_extension:
-        return ym_read("end_extension", "t-אנא הקישו את מספר השלוחה אליה תרצו לעבור בסיום (לשלוחה פנימית הקישו כוכבית בין שלוחה לשלוחה) ובסיום הקישו סולמית", 20)
+        return ym_read("end_extension", "t-אנא הקישו את מספר השלוחה אליה תרצו לעבור בסיום (לשלוחה פנימית הקישו כוכבית) ובסיום הקישו סולמית", 10)
 
-    # שאלה 7 - מיקום אחרון
+    # ---------- שאלה 7: חזרה למיקום אחרון ----------
     if last_play_action is None:
-        return ym_read("last_play_action", "t-ברירת המחדל לא לשמור מיקום אחרון. לשמור עם תפריט (1), אוטומטי (2), ברירת מחדל (0)", 1)
+        return ym_read("last_play_action", "t-ברירת המחדל לא לשמור מיקום. לשמור עם תפריט הקש 1, אוטומטי הקש 2, להשאיר ברירת מחדל הקש 0", 1)
+    if last_play_action not in ("0", "1", "2"):
+        return ym_read("last_play_action", "t-קלט לא תקין. לשמור עם תפריט הקש 1, אוטומטי הקש 2, להשאיר ברירת מחדל הקש 0", 1)
 
-    # ===================== המרת הגדרות =====================
-    try:
-        clean_ext = extension.strip().replace('*', '/').replace('-', '/').strip('/')
-        if not clean_ext:
-            return ym_say_and_return_to_main("t-שגיאה: מספר שלוחה ריק")
+    # ---------- המרת תשובות ----------
+    if say_length == "1":
+        say_length_value = "say_length=yes"
+    elif say_length == "2":
+        say_length_value = "playfile_say_length_if=5"
+    else:
+        say_length_value = "say_length=no"
 
-        token = f"{system.strip()}:{password.strip()}"
+    beep_line = "play_beep=no" if play_beep == "1" else ""
+    order_line = "start=min" if play_order == "1" else ""
+    files_amount_line = "say_files_amount=yes" if say_files_amount == "1" else ""
 
-        # בניית ext.ini
-        say_length_value = {
-            "1": "say_length=yes",
-            "2": "playfile_say_length_if=5",
-        }.get(say_length, "say_length=no")
-
-        beep_line = "play_beep=no" if play_beep == "1" else ""
-        order_line = "start=min" if play_order == "1" else ""
-        files_amount_line = "say_files_amount=yes" if say_files_amount == "1" else ""
-
+    if source_extension == "1" and source_extension_path:
+        clean_source = clean_extension_path(source_extension_path)
+        source_line = f"folder_to_play=/{clean_source}"
+    else:
         source_line = ""
-        if source_extension == "1" and source_extension_path:
-            clean_source = source_extension_path.strip().replace('*', '/').replace('-', '/').strip('/')
-            if clean_source:
-                source_line = f"folder_to_play={clean_source}"
 
+    if end_action == "1" and end_extension:
+        clean_end = clean_extension_path(end_extension)
+        end_line = f"playfile_end_goto=/{clean_end}"
+    else:
         end_line = ""
-        if end_action == "1" and end_extension:
-            clean_end = end_extension.strip().replace('*', '/').replace('-', '/').strip('/')
-            if clean_end:
-                end_line = f"playfile_end_goto=/{clean_end}"
 
-        if last_play_action == "1":
-            last_play_lines = "save_last_play=yes\nlast_play_tfr=yes"
-        elif last_play_action == "2":
-            last_play_lines = "save_last_play=yes\nlast_play_auto=yes"
-        else:
-            last_play_lines = ""
+    if last_play_action == "1":
+        last_play_lines = "save_last_play=yes\nlast_play_tfr=yes"
+    elif last_play_action == "2":
+        last_play_lines = "save_last_play=yes\nlast_play_auto=yes"
+    else:
+        last_play_lines = ""
+
+    # ===================== יצירת השלוחה =====================
+    try:
+        clean_ext = clean_extension_path(extension)
+        if not clean_ext:
+            return ym_say_and_go_back("t-שגיאה: השלוחה ריקה")
+
+        # ניקוי system/password כדי למנוע שבירת ה-token או הזרקת פרמטרים
+        system = sanitize_token_part(system_raw)
+        password = sanitize_token_part(password_raw)
+        if not system or not password:
+            return ym_say_and_go_back("t-שגיאה: פרטי מערכת לא תקינים")
+
+        token = f"{system}:{password}"
 
         ext_ini = f"""type=playfile
 after_play=return
@@ -138,23 +185,26 @@ after_play=return
 {last_play_lines}
 """
 
-        # ניקוי שורות ריקות
-        ext_ini = "\n".join(line for line in ext_ini.splitlines() if line.strip())
+        # מסירים שורות ריקות
+        ext_ini = "\n".join([line for line in ext_ini.splitlines() if line.strip()])
 
-        logging.info(f"יוצר playfile שלוחה {clean_ext}\n{ext_ini}")
+        logging.info(f"יוצר שלוחת playfile {clean_ext}")
 
-        # שלב 1: יצירת השלוחה
         r1 = requests.get(
             f"{YEMOT_API_URL}UpdateExtension",
-            params={"token": token, "path": f"ivr2:{clean_ext}", "type": "playfile"},
+            params={
+                "token": token,
+                "path": f"ivr2:{clean_ext}",
+                "type": "playfile"
+            },
             timeout=15
         )
+        logging.info(f"UpdateExtension: {r1.status_code}")
 
         if not (r1.status_code == 200 and '"responseStatus":"OK"' in r1.text):
-            logging.error(f"UpdateExtension failed: {r1.text}")
-            return ym_say_and_return_to_main("t-שגיאה ביצירת השלוחה")
+            logging.error(f"UpdateExtension נכשל: {r1.text}")
+            return ym_say_and_go_back("t-שגיאה ביצירת השלוחה")
 
-        # שלב 2: העלאת התפריט
         r2 = requests.post(
             f"{YEMOT_API_URL}UploadTextFile",
             params={
@@ -164,33 +214,27 @@ after_play=return
             },
             timeout=15
         )
-
-        logging.info(f"UploadTextFile: {r2.status_code} - {r2.text}")
+        logging.info(f"UploadTextFile: {r2.status_code}")
 
         if r2.status_code == 200 and '"responseStatus":"OK"' in r2.text:
-            # הודעת סיכום
-            length_label = {"1": "כן (תמיד)", "2": "כן (רק מעל 5 דקות)"}.get(say_length, "לא")
-            beep_label = "ללא ביפ" if play_beep == "1" else "עם ביפ (ברירת מחדל)"
-            order_label = "מהישן לחדש" if play_order == "1" else "מהחדש לישן (ברירת מחדל)"
-            files_label = "כן" if say_files_amount == "1" else "לא"
-            source_label = f"משלוחה {source_extension_path}" if source_extension == "1" else "השלוחה עצמה"
-            end_label = f"לשלוחה {end_extension}" if end_action == "1" else "חזרה אחורה (ברירת מחדל)"
-            last_label = {"1": "עם תפריט", "2": "אוטומטי"}.get(last_play_action, "לא")
-
-            msg = (f"t-שלוחת ההשמעה {clean_ext} נוצרה בהצלחה. "
-                   f"אורך: {length_label}. ביפ: {beep_label}. "
-                   f"סדר: {order_label}. כמות: {files_label}. "
-                   f"מקור: {source_label}. סיום: {end_label}. "
-                   f"מיקום אחרון: {last_label}.")
-
-            return ym_say_and_return_to_main(msg)
+            msg = f"t-שלוחת ההשמעה {clean_ext} נוצרה"
+            return ym_say_and_go_back(msg)
         else:
-            return ym_say_and_return_to_main("t-השלוחה נוצרה אך קובץ התפריט לא נטען")
+            logging.error(f"UploadTextFile נכשל: {r2.text}")
+            return ym_say_and_go_back("t-השלוחה נוצרה אך התפריט לא נטען")
 
-    except Exception as e:
-        logging.exception("שגיאה ביצירת playfile")
-        return ym_say_and_return_to_main("t-שגיאה טכנית. נסה שוב")
+    except requests.exceptions.Timeout:
+        logging.exception("Timeout מול Yemot API")
+        return ym_say_and_go_back("t-השרת לא הגיב, נסו שוב")
+    except requests.exceptions.RequestException:
+        logging.exception("שגיאת תקשורת מול Yemot API")
+        return ym_say_and_go_back("t-שגיאת תקשורת, נסו שוב")
+    except Exception:
+        logging.exception("שגיאה כללית")
+        return ym_say_and_go_back("t-שגיאה טכנית")
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # חשוב: debug=False בפרודקשן! debug=True + host 0.0.0.0 מאפשר הרצת קוד מרוחק (RCE)
+    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host='0.0.0.0', port=5000, debug=debug_mode)
