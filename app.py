@@ -23,8 +23,15 @@ def ym_response(content: str):
     return res
 
 
-def ym_read(var_name: str, prompt: str, max_digits=1):
-    return ym_response(f"read={prompt}={var_name},{max_digits},12,1,Digits")
+def ym_read(var_name: str, prompt: str, max_digits=1, min_digits=1, sec_wait=15):
+    """
+    מבנה הפקודה בימות המשיח:
+    read=<פרומפט>=<var_name>,<max_digits>,<min_digits>,<sec_wait>,<typing_playback_mode>
+    בקוד הקודם min_digits ו-sec_wait היו קבועים ל-12,1 בכל שאלה - כלומר נדרשו
+    12 ספרות תוך שנייה אחת גם בשאלות של הקשה בודדת (0/1/2), מה שגרם לכישלון
+    קליטת הקלט מיד אחרי ההקשה הראשונה ולניתוק השיחה.
+    """
+    return ym_response(f"read={prompt}={var_name},{max_digits},{min_digits},{sec_wait},Digits")
 
 
 def ym_say_and_go_back(text: str):
