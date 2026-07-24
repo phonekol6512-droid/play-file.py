@@ -16,14 +16,12 @@ def ym_response(content: str):
 
 
 def ym_read(var_name: str, prompt: str, max_digits=10):
-    """מחזיר read עם max_digits ברירת מחדל 10"""
     return ym_response(f"read={prompt}={var_name},{max_digits},12,1,Digits")
 
 
-def ym_say_and_return(text: str):
-    """משמיע הודעה באמצעות TTS ומחזיר לתפריט הראשי (ללא ניתוק)"""
-    # שימוש ב-say להשמעת טקסט, ו-end_goto=/ לחזרה בטוחה
-    return ym_response(f"say=he-IL,{text}\nend_goto=/")
+def ym_say_and_go_back(text: str):
+    """משמיע הודעה וחוזר לתפריט הקודם (ללא ניתוק)"""
+    return ym_response(f"id_list_message={text}")
 
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
@@ -120,7 +118,7 @@ def create_playfile():
     try:
         clean_ext = extension.strip().replace('*', '/').replace('-', '/').strip('/')
         if not clean_ext:
-            return ym_say_and_return("t-שגיאה: השלוחה ריקה")
+            return ym_say_and_go_back("t-שגיאה: השלוחה ריקה")
 
         token = f"{system.strip()}:{password.strip()}"
 
@@ -154,7 +152,7 @@ after_play=return
         logging.info(f"UpdateExtension: {r1.status_code} - {r1.text}")
 
         if not (r1.status_code == 200 and '"responseStatus":"OK"' in r1.text):
-            return ym_say_and_return("t-שגיאה ביצירת השלוחה")
+            return ym_say_and_go_back("t-שגיאה ביצירת השלוחה")
 
         # ---------- שלב 2: העלאת קובץ התפריט ----------
         r2 = requests.post(
@@ -170,6 +168,16 @@ after_play=return
 
         # ---------- הודעת סיכום ----------
         if r2.status_code == 200 and '"responseStatus":"OK"' in r2.text:
+            speed_labels = {
+                "-2": "קצת איטי",
+                "2": "קצת מהיר",
+                "-4": "איטי",
+                "4": "מהיר",
+                "-7": "איטי מאוד",
+                "7": "מהיר מאוד",
+                "-10": "איטי במיוחד",
+                "10": "מהיר במיוחד"
+            }
             if say_length == "1":
                 length_label = "כן (תמיד)"
             elif say_length == "2":
@@ -198,13 +206,13 @@ after_play=return
                    f"מקור: {source_label}. "
                    f"סיום: {end_label}. "
                    f"חזרה למיקום אחרון: {last_play_label}.")
-            return ym_say_and_return(msg)
+            return ym_say_and_go_back(msg)
         else:
-            return ym_say_and_return("t-השלוחה נוצרה אך התפריט לא נטען")
+            return ym_say_and_go_back("t-השלוחה נוצרה אך התפריט לא נטען")
 
     except Exception as e:
         logging.exception("שגיאה")
-        return ym_say_and_return("t-שגיאה טכנית. נסה שוב")
+        return ym_say_and_go_back("t-שגיאה טכנית")
 
 
 if __name__ == '__main__':
