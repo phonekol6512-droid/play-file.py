@@ -15,13 +15,14 @@ def ym_response(content: str):
     return res
 
 
-def ym_read(var_name: str, prompt: str, max_digits=1):
+def ym_read(var_name: str, prompt: str, max_digits=10):
+    """מחזיר read עם max_digits ברירת מחדל 10"""
     return ym_response(f"read={prompt}={var_name},{max_digits},12,1,Digits")
 
 
 def ym_say_and_return(text: str):
-    """משמיע הודעה וחוזר לתפריט הראשי."""
-    return ym_response(f"id_list_message={text}\nend_goto=/")
+    """משמיע הודעה וחוזר לתפריט הקודם (ללא ניתוק)"""
+    return ym_response(f"id_list_message={text}")
 
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
@@ -40,18 +41,18 @@ def create_playfile():
     source_extension_path = request.values.get('source_extension_path')
     end_action = request.values.get('end_action')
     end_extension = request.values.get('end_extension')
-    last_play_action = request.values.get('last_play_action')        # חדש: מה לעשות עם חזרה למיקום אחרון
+    last_play_action = request.values.get('last_play_action')
 
     if not system:
         return ym_read("system", "t-אנא הקישו את מספר המערכת ובסיום הקישו סולמית", 10)
     if not password:
         return ym_read("password", "t-אנא הקישו את סיסמת המערכת ובסיום הקישו סולמית", 10)
     if not extension:
-        return ym_read("extension", "t-אנא הקישו את מספר השלוחה החדשה ובסיום הקישו סולמית", 10)
+        return ym_read("extension", "t-אנא הקישו את מספר השלוחה החדשה ובסיום הקישו סולמית, לשלוחה פנימית הקישו כוכבית בין שלוחה לשלוחה", 10)
 
     # ---------- שאלה 1: השמעת אורך הקובץ ----------
     if say_length is None:
-        return ym_read("say_length", "t-האם להשמיע את אורך הקובץ?      1 -  כן תמיד 2 - רק אם ארוך מ - 5  דקות   0 - לא", 1)
+        return ym_read("say_length", "t-האם להשמיע את אורך הקובץ? 1-כן תמיד 2-רק אם ארוך מ-5 דקות 0-לא", 1)
 
     # ---------- שאלה 2: ביפ בין קבצים ----------
     if play_beep is None:
@@ -79,7 +80,7 @@ def create_playfile():
     if end_action == "1" and not end_extension:
         return ym_read("end_extension", "t-אנא הקישו את מספר השלוחה אליה תרצו לעבור בסיום (לשלוחה פנימית הקישו כוכבית בין שלוחה לשלוחה) ובסיום הקישו סולמית", 10)
 
-    # ---------- שאלה 7: חזרה למיקום האחרון (חדש!) ----------
+    # ---------- שאלה 7: חזרה למיקום האחרון ----------
     if last_play_action is None:
         return ym_read("last_play_action", "t-ברירת המחדל לא לשמור מיקום אחרון. לשמור מיקום אחרון עם תפריט בחירה הקש 1, לחזרה אוטומטית הקש 2, להשאיר ברירת מחדל הקש 0", 1)
 
@@ -107,15 +108,11 @@ def create_playfile():
     else:
         end_line = ""
 
-    # ---------- המרת תשובה לחזרה למיקום אחרון ----------
     if last_play_action == "1":
-        # תפריט בחירה: שומר מיקום + מציג תפריט
         last_play_lines = "save_last_play=yes\nlast_play_tfr=yes"
     elif last_play_action == "2":
-        # חזרה אוטומטית: שומר מיקום + חוזר אוטומטית
         last_play_lines = "save_last_play=yes\nlast_play_auto=yes"
     else:
-        # ברירת מחדל: לא שומר מיקום
         last_play_lines = ""
 
     # ===================== יצירת השלוחה =====================
