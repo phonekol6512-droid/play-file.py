@@ -55,37 +55,37 @@ def create_playfile():
 
     # --- שלב 4: אורך הקובץ ---
     if say_length is None:
-        return ym_read("say_length", "t-אורך הקובץ: 1-כן תמיד 2-רק מעל 5 דקות 0-לא#", 1)
+        return ym_read("say_length", "t-האם ברצונך להגדיר שישמיע את אורך הקובץ לפני שמשמיע את הקובץ? להגדרה כברירת מחדל הקש 0 אם ברצונך שישמיע את אורך הקובץ הקש 1 אם ברצונך שישמיע את אורך הקובץ רק אם הקובץ ארוך מחמש דקות הקש 2", 1)
 
     # --- שלב 5: ביפ ---
     if play_beep is None:
-        return ym_read("play_beep", "t-להסיר ביפ? 1-כן 0-לא#", 1)
+        return ym_read("play_beep", "t-ברירת המחדל של המערכת משמיע בין קובץ לקובץ ציפצוף להמשך ללא שינוי הקש 0 להגדרה שלא ישמיע ציפצוף בין הודעה להודעה הקש 1", 1)
 
     # --- שלב 6: סדר השמעה ---
     if play_order is None:
-        return ym_read("play_order", "t-סדר: 1-ישן לחדש 0-ברירת מחדל#", 1)
+        return ym_read("play_order", "t-ברירת מחדל של המערכת משמיע את הקבצים מהחדש לישן להמשך ללא שינוי הקש 0 לשינוי והגדרה שישמיע את הקבצים מהישן לחדש הקש 1", 1)
 
     # --- שלב 7: כמות הודעות ---
     if say_files_amount is None:
-        return ym_read("say_files_amount", "t-להשמיע כמות? 1-כן 0-לא#", 1)
+        return ym_read("say_files_amount", "t-האם ברצונך שישמיע בכניסה לשלוחה את כמות הקבצים שנמצאים בשלוחה? להגדרה כברירת מחדל הקש 0 להגדרה שישמיע את כמות הקבצים הקש 1", 1)
 
     # --- שלב 8: מקור ---
     if source_extension is None:
-        return ym_read("source_extension", "t-משלוחה אחרת? 1-כן 0-לא#", 1)
+        return ym_read("source_extension", "t-ברירת המחדל של המערכת משמיע את הקבצים מהשלוחה עצמה להמשך ללא שינוי הקש 0 לשינוי והגדרה שישמיע את הקבצים משלוחה אחרת הקש 1", 1)
 
     if source_extension == "1" and not source_extension_path:
-        return ym_read("source_extension_path", "t-הקש את השלוחה המקור (לפנימית הקש כוכבית)#", 10)
+        return ym_read("source_extension_path", "t-הקש את השלוחה שברצונך ממנה שישמיע את הקבצים כאשר בין שלוחה לשלוחה הקש כוכבית", 10)
 
     # --- שלב 9: סיום ---
     if end_action is None:
-        return ym_read("end_action", "t-לעבור לשלוחה בסיום? 1-כן 0-לא#", 1)
+        return ym_read("end_action", "t-ברירת מחדל של המערכת בסיום השמעת ההודעות חוזר לתפריט הקודם, להמשך ללא שינוי הקש 0 לשינוי והגדרה שיעבור בסיום ההשמעה לשלוחה אחרת הקש 1", 1)
 
     if end_action == "1" and not end_extension:
-        return ym_read("end_extension", "t-הקש את שלוחת היעד (לפנימית הקש כוכבית)#", 10)
+        return ym_read("end_extension", "t-אנא הקש את מספר השלוחה אליה יעבור בסיום כאשר בין שלוחה לשלוחה הקש כוכבית", 10)
 
     # --- שלב 10: שמירת מיקום ---
     if last_play_action is None:
-        return ym_read("last_play_action", "t-שמירת מיקום: 1-תפריט 2-אוטומטי 0-לא#", 1)
+        return ym_read("last_play_action", "t-ברירת המחדל של המערכת משמיע את השלוחה מחדש כל פעם להמשך ללא שינוי הקש 0 לשינוי והגדרה שיכנס לשלוחה ישאל את המאזין האם לחזור למקום האחרון אליו האזין בשלוחה הקש 1 לשינוי והגדרה שמייד יחזור למיקום האחרון אליו האזין הקש שתיים", 1)
 
     # --- כעת יש לנו את כל הנתונים ---
     try:
@@ -161,7 +161,7 @@ after_play=return
         logging.info(f"UploadTextFile: {r2.status_code} - {r2.text}")
 
         if r2.status_code == 200 and '"responseStatus":"OK"' in r2.text:
-            return ym_say_and_go_back(f"t-שלוחת ההשמעה {clean_ext} נוצרה בהצלחה")
+            return ym_say_and_go_back(f"t- שלוחה  {clean_ext} נוצרה בהצלחה ")
         else:
             return ym_say_and_go_back("t-שגיאה בהעלאת התפריט")
 
