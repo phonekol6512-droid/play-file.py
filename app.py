@@ -16,12 +16,13 @@ def ym_response(content: str):
 
 
 def ym_read(var_name: str, prompt: str, max_digits=10):
+    """מחזיר read עם max_digits=10 כברירת מחדל (למניעת ניתוק)"""
     return ym_response(f"read={prompt}={var_name},{max_digits},12,1,Digits")
 
 
-def ym_say_and_return_to_main(text: str):
-    """משמיע הודעה וחוזר לתפריט הראשי (/)"""
-    return ym_response(f"id_list_message={text}\ngo_to_folder=/")
+def ym_say_and_go_back(text: str):
+    """משמיע הודעה וחוזר לתפריט הקודם"""
+    return ym_response(f"id_list_message={text}")
 
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
@@ -43,7 +44,7 @@ def create_playfile():
 
     # ---------- שאלה: השמעת אורך הקובץ ----------
     if say_length is None:
-        return ym_read("say_length", "t-האם להשמיע את אורך הקובץ? 1-כן תמיד 2-רק אם ארוך מ-5 דקות 0-לא", 1)
+        return ym_read("say_length", "t-האם להשמיע את אורך הקובץ? 1-כן תמיד 2-רק אם ארוך מ-5 דקות 0-לא", 10)
 
     # ---------- המרת התשובה ----------
     if say_length == "1":
@@ -57,7 +58,7 @@ def create_playfile():
     try:
         clean_ext = extension.strip().replace('*', '/').replace('-', '/').strip('/')
         if not clean_ext:
-            return ym_say_and_return_to_main("t-שגיאה: השלוחה ריקה")
+            return ym_say_and_go_back("t-שגיאה: השלוחה ריקה")
 
         token = f"{system.strip()}:{password.strip()}"
 
@@ -84,7 +85,7 @@ play_beep=no
         logging.info(f"UpdateExtension: {r1.status_code} - {r1.text}")
 
         if not (r1.status_code == 200 and '"responseStatus":"OK"' in r1.text):
-            return ym_say_and_return_to_main("t-שגיאה ביצירת השלוחה")
+            return ym_say_and_go_back("t-שגיאה ביצירת השלוחה")
 
         # ---------- שלב 2: העלאת קובץ התפריט ----------
         r2 = requests.post(
@@ -107,13 +108,13 @@ play_beep=no
             else:
                 length_label = "לא"
             msg = f"t-שלוחת ההשמעה {clean_ext} נוצרה. אורך הקובץ: {length_label}."
-            return ym_say_and_return_to_main(msg)
+            return ym_say_and_go_back(msg)
         else:
-            return ym_say_and_return_to_main("t-השלוחה נוצרה אך התפריט לא נטען")
+            return ym_say_and_go_back("t-השלוחה נוצרה אך התפריט לא נטען")
 
     except Exception as e:
         logging.exception("שגיאה")
-        return ym_say_and_return_to_main("t-שגיאה טכנית. נסה שוב")
+        return ym_say_and_go_back("t-שגיאה טכנית. נסה שוב")
 
 
 if __name__ == '__main__':
