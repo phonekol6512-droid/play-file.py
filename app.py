@@ -23,15 +23,13 @@ def ym_response(content: str):
     return res
 
 
-def ym_read(var_name: str, prompt: str, max_digits=1, min_digits=1, sec_wait=15):
+def ym_read(var_name: str, prompt: str, max_digits=1):
     """
-    מבנה הפקודה הנכון בימות המשיח (מאומת מול דוגמאות api_NNN רשמיות):
-    read=<פרומפט>=<var_name>,<sec_wait>,<max_digits>,<min_digits>,,<typing_playback_mode>
-    שימו לב לסדר: sec_wait מגיע *לפני* max_digits, לא אחריו - טעות בסדר הזה
-    גורמת לכך שהערכים "נשפכים" לשדות הלא נכונים (למשל min_digits נחת בטעות
-    בתור max_digits, מה שגרם להגבלת ספרות שגויה).
+    פורמט מוכח לעבודה - זהה לקובץ create-menu שפועל בפרודקשן.
     """
-    return ym_response(f"read={prompt}={var_name},{sec_wait},{max_digits},{min_digits},,Digits")
+    content = f"read={prompt}={var_name},{max_digits},12,1,Digits"
+    logging.info(f"שולח לימות: {content}")
+    return ym_response(content)
 
 
 def ym_say_and_go_back(text: str):
@@ -65,6 +63,18 @@ def restrict_ip():
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
 def create_playfile():
+    # לוג של כל בקשה נכנסת - כדי שבפעם הבאה שמשהו נכשל יהיה תיעוד מלא
+    logging.info(f"בקשה נכנסת: {dict(request.values)}")
+    try:
+        return _create_playfile_impl()
+    except Exception:
+        # רשת הביטחון: כל שגיאה לא צפויה בכל שלב תחזיר הודעה קולית תקינה
+        # לימות, במקום עמוד שגיאת HTML גנרי שימות לא יודע לפרש (וגורם לניתוק שקט)
+        logging.exception(f"שגיאה לא צפויה. פרמטרים: {dict(request.values)}")
+        return ym_say_and_go_back("t-שגיאה טכנית, נסו שוב")
+
+
+def _create_playfile_impl():
     # ---------- פרטי מערכת ----------
     system_raw = request.values.get('system')
     password_raw = request.values.get('password')
