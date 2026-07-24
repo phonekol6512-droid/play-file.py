@@ -21,8 +21,9 @@ def ym_read(var_name: str, prompt: str, max_digits=10):
 
 
 def ym_say_and_return(text: str):
-    """משמיע הודעה וחוזר לתפריט הקודם (ללא ניתוק)"""
-    return ym_response(f"id_list_message={text}")
+    """משמיע הודעה באמצעות TTS ומחזיר לתפריט הראשי (ללא ניתוק)"""
+    # שימוש ב-say להשמעת טקסט, ו-end_goto=/ לחזרה בטוחה
+    return ym_response(f"say=he-IL,{text}\nend_goto=/")
 
 
 @app.route('/create-playfile', methods=['GET', 'POST'])
