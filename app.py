@@ -43,19 +43,19 @@ def create_playfile():
 
     # --- שלב 1: system ---
     if not system:
-        return ym_read("system", "t-אנא הקישו את מספר המערכת ובסיומה סולמית", 10)
+        return ym_read("system", "t-אנא הקישו את מספר המערכת ובסיום הקישו סולמית", 10)
 
     # --- שלב 2: password ---
     if not password:
-        return ym_read("password", "t-אנא הקישו את סיסמת המערכת ובסיומה סולמית", 10)
+        return ym_read("password", "t-אנא הקישו את סיסמת המערכת ובסיום הקישו סולמית", 10)
 
     # --- שלב 3: extension ---
     if not extension:
-        return ym_read("extension", "t-אנא הקישו את מספר השלוחה החדשה ובסיומה סולמית", 10)
+        return ym_read("extension", "t-אנא הקישו את מספר השלוחה שברצונכם להגדיר לשלוחה פנימית הקישו כוכבית בין שלוחה לשלוחה בסיום הקישו סולמית", 10)
 
     # --- שלב 4: אורך הקובץ ---
     if say_length is None:
-        return ym_read("say_length", "t-האם ברצונך להגדיר שישמיע את אורך הקובץ לפני שמשמיע את הקובץ? להגדרה כברירת מחדל הקש 0 אם ברצונך שישמיע את אורך הקובץ הקש 1 אם ברצונך שישמיע את אורך הקובץ רק אם הקובץ ארוך מחמש דקות הקש 2", 1)
+        return ym_read("say_length", "t-התחברתם בהצלחה. שימו לב בסוף כל הקשה הקישו סולמית, ובהגדרת שלוחה פנימית הקישו כוכבית בין שלוחה לשלוחה, הנכם מועברים להגדרת השלוחה, אם ברצונך להגדיר שישמיע את אורך הקובץ לפני שמשמיע את הקובץ? להגדרה כברירת מחדל הקש 0 אם ברצונך שישמיע את אורך הקובץ הקש 1 אם ברצונך שישמיע את אורך הקובץ רק אם הקובץ ארוך מחמש דקות הקש 2", 1)
 
     # --- שלב 5: ביפ ---
     if play_beep is None:
@@ -161,7 +161,7 @@ after_play=return
         logging.info(f"UploadTextFile: {r2.status_code} - {r2.text}")
 
         if r2.status_code == 200 and '"responseStatus":"OK"' in r2.text:
-            return ym_say_and_go_back(f"t- שלוחה  {clean_ext} נוצרה בהצלחה ")
+            return ym_say_and_go_back(f"t- השלוחה הוגדרה בהצלחה במיקום  {clean_ext} נוצרה בהצלחה ")
         else:
             return ym_say_and_go_back("t-שגיאה בהעלאת התפריט")
 
